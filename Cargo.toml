@@ -1,0 +1,11 @@
+[package]
+name = "advent-of-code-2019"
+version = "0.1.0"
+authors = ["Owen Tuz <owen@segfault.re>"]
+edition = "2018"
+
+[dependencies]
+
+[lib]
+name="util"
+path="src/lib.rs"
