@@ -6,10 +6,10 @@
 extern crate simple_error;
 
 use simple_error::SimpleError;
-use std::collections::HashSet;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
-#[derive(Clone,Copy,Debug,Hash,PartialEq,Eq)]
+#[derive(Clone,Copy,Debug,Hash,PartialOrd,Ord,PartialEq,Eq)]
 struct Point {
     x: i32,
     y: i32,
@@ -120,25 +120,23 @@ fn test_find_points_visited(){
         (Direction::L,2),
     ];
 
-    let expected: HashSet<Point> = [
-        Point{x:0,y:1},
-        Point{x:0,y:2},
-        Point{x:0,y:3},
-        Point{x:-1,y:3},
-        Point{x:-2,y:3}
-    ].iter().cloned().collect();
+    let result = find_points_visited(&input);
 
-    assert_eq!(expected,find_points_visited(input));
+    assert_eq!(Some(&1),result.get(&Point{x:0,y:1}));
+    assert_eq!(Some(&3),result.get(&Point{x:0,y:3}));
+    assert_eq!(Some(&5),result.get(&Point{x:-2,y:3}));
 }
-fn find_points_visited(path: &Vec<(Direction, i32)>) -> HashSet<Point> {
+fn find_points_visited(path: &Vec<(Direction, i32)>) -> BTreeMap<Point,i32> {
     let mut start = Point{x:0,y:0};
-    let mut visited = HashSet::new();
+    let mut visited = BTreeMap::new();
+    let mut travelled = 0;
 
     for entry in path {
         let (direction, distance) = entry;
         let gv = GridVector::new(start,*direction,*distance);
         for point in gv {
-            visited.insert(point);
+            travelled += 1;
+            visited.entry(point).or_insert(travelled);
             start = point;
         }
     }
@@ -168,13 +166,26 @@ fn parse_wire_to_vec(wire: &str) -> Vec<(Direction,i32)> {
 }
 
 fn part1(wire1: &Vec<(Direction,i32)>,wire2: &Vec<(Direction,i32)>) -> i32 {
+    let visited_wire1 = find_points_visited(wire1);
 
+    find_points_visited(wire2).keys()
+                              .filter(|x| visited_wire1.contains_key(x))
+                              .map(|x| get_manhattan_distance(x,&Point{x:0,y:0}))
+                              .min().unwrap()
+}
+
+fn part2(wire1: &Vec<(Direction,i32)>,wire2: &Vec<(Direction,i32)>) -> i32 {
     let visited_wire1 = find_points_visited(wire1);
     let visited_wire2 = find_points_visited(wire2);
 
-    visited_wire1.intersection(&visited_wire2)
-                 .map(|x| get_manhattan_distance(x,&Point{x:0,y:0}))
-                 .min().unwrap()
+    let mut steps = Vec::new();
+
+    for (k,v) in visited_wire1.iter() {
+        if visited_wire2.contains_key(k) {
+            steps.push(v + visited_wire2.get(k).unwrap());
+        }
+    }
+    *steps.iter().min().unwrap()
 }
 
 fn main() {
@@ -184,4 +195,5 @@ fn main() {
     let wire2: Vec<(Direction, i32)> = parse_wire_to_vec(input[1]);
 
     println!("Part 1: Answer is {}", part1(&wire1,&wire2));
+    println!("Part 2: Answer is {}", part2(&wire1,&wire2));
 }
