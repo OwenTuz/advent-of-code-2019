@@ -3,4 +3,14 @@
 [[package]]
 name = "advent-of-code-2019"
 version = "0.1.0"
+dependencies = [
+ "simple-error 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
+[[package]]
+name = "simple-error"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[metadata]
+"checksum simple-error 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)" = "01c1c2ededd95f93b1d65e7f8b5b17670e926bf9cbb55f8b91b26b0bd40d3259"

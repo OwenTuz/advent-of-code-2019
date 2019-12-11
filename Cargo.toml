@@ -5,6 +5,7 @@ authors = ["Owen Tuz <owen@segfault.re>"]
 edition = "2018"
 
 [dependencies]
+simple-error = '0.1.9'
 
 [lib]
 name="util"
