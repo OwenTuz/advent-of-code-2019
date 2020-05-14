@@ -1,4 +1,5 @@
 use std::str::FromStr;
+pub mod intcode;
 
 #[test]
 fn test_input_to_str_vec(){
