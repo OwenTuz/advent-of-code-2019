@@ -7,6 +7,10 @@ pub mod intcode {
         Mul,
         Mov,
         Out,
+        Jnz,
+        Jz,
+        Lt,
+        Eq,
     }
 
     #[derive(PartialEq)]
@@ -29,6 +33,10 @@ pub mod intcode {
             2  => Opcode::Mul,
             3  => Opcode::Mov,
             4  => Opcode::Out,
+            5  => Opcode::Jnz,
+            6  => Opcode::Jz,
+            7  => Opcode::Lt,
+            8  => Opcode::Eq,
             _  => { panic!("Invalid/unimplemented opcode {:?}", raw_value) }
         }
     }
@@ -46,11 +54,10 @@ pub mod intcode {
                 panic!("TEST failed: invalid output {:?}", output)
             }
 
-            match run_instruction(&opcode, &mut program, pos, input) {
+            match run_instruction(&opcode, &mut program, &mut pos, input) {
                 Some(x) => { output = x },
                 None    => {},
             }
-            pos += num_args(&opcode) + 1;
             opcode = get_opcode(&program[pos]);
         }
         output
@@ -60,19 +67,51 @@ pub mod intcode {
     // mutates the program according the instruction given
     // If there is an output from the instruction, returns Some(output)
     // otherwise returns None
-    pub fn run_instruction(opcode: &Opcode, program: &mut Vec<i32>, pos: usize, input: Option<i32>) -> Option<i32> {
-        let mut args: Vec<i32> = get_args(&program, pos);
-        let dest: usize = match opcode {
-            &Opcode::Out => 0,
-            _            => args.pop().unwrap() as usize,
+    fn run_instruction(opcode: &Opcode, program: &mut Vec<i32>, pos: &mut usize, input: Option<i32>) -> Option<i32> {
+        let mut args: Vec<i32> = get_args(&program, &pos);
+
+        let dest: usize = match writes_to_program(opcode) {
+            true  => args.pop().unwrap() as usize,
+            false => 0,
         };
+        let mut pos_changed = false;
+
         let mut output: Option<i32> = None;
         match opcode {
-            Opcode::Add => { program[dest] = args.pop().unwrap() + args.pop().unwrap() },
-            Opcode::Mul => { program[dest] = args.pop().unwrap() * args.pop().unwrap() },
+            Opcode::Add => { program[dest] = args[0] + args[1] },
+            Opcode::Mul => { program[dest] = args[0] * args[1] },
             Opcode::Mov => { program[dest] = input.unwrap() },
             Opcode::Out => { output = args.pop() },
-            _           => { panic!("Invalid opcode value {:?}", opcode) },
+            Opcode::Jnz => {
+                if args[0] != 0 {
+                    *pos = args[1] as usize;
+                    pos_changed = true;
+                }
+            },
+            Opcode::Jz  => {
+                if args[0] == 0 {
+                    *pos = args[1] as usize;
+                    pos_changed = true;
+                }
+            },
+            Opcode::Lt  => {
+                if args[0] < args[1] {
+                    program[dest] = 1
+                } else {
+                    program[dest] = 0
+                }
+            },
+            Opcode::Eq  => {
+                if args[0] == args[1] {
+                    program[dest] = 1
+                } else {
+                    program[dest] = 0
+                }
+            },
+            _ => { panic!("Invalid opcode value {:?}", opcode) },
+        }
+        if !pos_changed {
+            *pos = *pos + num_args(&opcode) + 1;
         }
         return output
     }
@@ -84,17 +123,35 @@ pub mod intcode {
             Opcode::Mul => 3,
             Opcode::Mov => 1,
             Opcode::Out => 1,
+            Opcode::Jnz => 2,
+            Opcode::Jz  => 2,
+            Opcode::Lt  => 3,
+            Opcode::Eq  => 3,
         }
+    }
+
+    fn writes_to_program(opcode: &Opcode) -> bool {
+        let writers = vec![
+            Opcode::Add,
+            Opcode::Mul,
+            Opcode::Mov,
+            Opcode::Lt,
+            Opcode::Eq,
+        ];
+        if writers.contains(opcode) {
+            return true
+        }
+        false
     }
 
     #[test]
     fn test_get_args() {
         let program = &vec![1002,4,3,4,33];
         let expected = vec![33,3,4];
-        assert_eq!(get_args(program, 0), expected);
+        assert_eq!(get_args(program, &0), expected);
     }
-    fn get_args(program: &Vec<i32>, pos: usize) -> Vec<i32> {
-        let raw_value = program[pos];
+    fn get_args(program: &Vec<i32>, pos: &usize) -> Vec<i32> {
+        let raw_value = program[*pos];
         let opcode = get_opcode(&raw_value);
         if opcode == Opcode::Stop {
             panic!("Called get_args() for opcode STOP, this should never happen")
@@ -110,10 +167,10 @@ pub mod intcode {
                 // last argument as a destination address.
                 // The spec says this is "position" mode but since we use it as
                 // an index after reading, we actually treat it as immediate
-                x if x == num_args && opcode != Opcode::Out => ParameterMode::Immediate,
-                _ if mode_digits % 10 == 0                  => ParameterMode::Position,
-                _ if mode_digits % 10 == 1                  => ParameterMode::Immediate,
-                _                                           => {
+                x if x == num_args && writes_to_program(&opcode) => ParameterMode::Immediate,
+                _ if mode_digits % 10 == 0                       => ParameterMode::Position,
+                _ if mode_digits % 10 == 1                       => ParameterMode::Immediate,
+                _                                                => {
                     panic!("Unsupported parameter mode indicator {:?}", mode_digits % 10)
                 },
             };
