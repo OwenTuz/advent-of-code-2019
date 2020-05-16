@@ -33,9 +33,9 @@ pub mod intcode {
         }
     }
 
-    pub fn run_program(input: &Vec<i32>) -> i32 {
+    pub fn run_program(tape: &Vec<i32>, input: Option<i32>) -> i32 {
         // Runs an Intcode program and returns its final state as Vec<i32>
-        let mut program = input.clone();
+        let mut program = tape.clone();
 
         let mut pos: usize = 0;
         let mut output: i32 = 0;
@@ -46,23 +46,38 @@ pub mod intcode {
                 panic!("TEST failed: invalid output {:?}", output)
             }
 
-            let mut args: Vec<i32> = get_args(&program, pos);
-            let dest: usize = args.pop().unwrap() as usize;
-
-            match opcode {
-                Opcode::Add => { program[dest] = args.pop().unwrap() + args.pop().unwrap() },
-                Opcode::Mul => { program[dest] = args.pop().unwrap() * args.pop().unwrap() },
-                Opcode::Mov => { program[dest] = args.pop().unwrap() },
-                Opcode::Out => { output = program[dest] },
-                _           => { panic!("Invalid opcode value {:?}", opcode) },
+            match run_instruction(&opcode, &mut program, pos, input) {
+                Some(x) => { output = x },
+                None    => {},
             }
-            pos += num_args(opcode) + 1;
+            pos += num_args(&opcode) + 1;
             opcode = get_opcode(&program[pos]);
         }
         output
     }
 
-    fn num_args(opcode: Opcode) -> usize {
+    // Given an opcode, mutable reference to a program, and current position within that program:
+    // mutates the program according the instruction given
+    // If there is an output from the instruction, returns Some(output)
+    // otherwise returns None
+    pub fn run_instruction(opcode: &Opcode, program: &mut Vec<i32>, pos: usize, input: Option<i32>) -> Option<i32> {
+        let mut args: Vec<i32> = get_args(&program, pos);
+        let dest: usize = match opcode {
+            &Opcode::Out => 0,
+            _            => args.pop().unwrap() as usize,
+        };
+        let mut output: Option<i32> = None;
+        match opcode {
+            Opcode::Add => { program[dest] = args.pop().unwrap() + args.pop().unwrap() },
+            Opcode::Mul => { program[dest] = args.pop().unwrap() * args.pop().unwrap() },
+            Opcode::Mov => { program[dest] = input.unwrap() },
+            Opcode::Out => { output = args.pop() },
+            _           => { panic!("Invalid opcode value {:?}", opcode) },
+        }
+        return output
+    }
+
+    fn num_args(opcode: &Opcode) -> usize {
         match opcode {
             Opcode::Stop => 0,
             Opcode::Add => 3,
@@ -84,21 +99,21 @@ pub mod intcode {
         if opcode == Opcode::Stop {
             panic!("Called get_args() for opcode STOP, this should never happen")
         }
-        let num_args = num_args(opcode);
+        let num_args = num_args(&opcode);
 
         let mut mode_digits = raw_value / 100;
         let mut args = Vec::new();
 
         for i in 1..(num_args + 1) {
             let mode: ParameterMode = match i {
-                // Last parameter is destination and is always an address
-                // The spec says this is "position mode" since we treat it as an
-                // address but we never read the value, so it behaves like
-                // immediate mode for our purposes and we override it
-                x if x == num_args         => ParameterMode::Immediate,
-                _ if mode_digits % 10 == 0 => ParameterMode::Position,
-                _ if mode_digits % 10 == 1 => ParameterMode::Immediate,
-                _                          => {
+                // Any instruction that writes to a location simply treats the
+                // last argument as a destination address.
+                // The spec says this is "position" mode but since we use it as
+                // an index after reading, we actually treat it as immediate
+                x if x == num_args && opcode != Opcode::Out => ParameterMode::Immediate,
+                _ if mode_digits % 10 == 0                  => ParameterMode::Position,
+                _ if mode_digits % 10 == 1                  => ParameterMode::Immediate,
+                _                                           => {
                     panic!("Unsupported parameter mode indicator {:?}", mode_digits % 10)
                 },
             };
